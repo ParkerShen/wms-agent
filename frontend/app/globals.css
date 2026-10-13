@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f7fa;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --muted: #eef1f5;
+  --muted-foreground: #647084;
+  --border: #e1e6ed;
+  --input: #e1e6ed;
+  --primary: #2864dc;
+  --primary-foreground: #ffffff;
+  --ring: #2864dc;
+  --radius: 1rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --font-sans: "Segoe UI", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--foreground);
+  font-family: "Segoe UI", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(ellipse at 18% 0%, rgba(219, 231, 255, 0.6), transparent 38rem),
+    var(--background);
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  color: #173c9c;
+  background: #dbe7ff;
+}

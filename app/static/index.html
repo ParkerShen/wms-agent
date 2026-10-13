@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="云仓只读库存运营助手">
+  <title>云仓运营助手</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d9e0ea;
+      --surface: #ffffff;
+      --canvas: #f4f7fb;
+      --brand: #2457d6;
+      --brand-dark: #173c9c;
+      --assistant: #edf3ff;
+      --danger: #b42318;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background: var(--canvas);
+    }
+    .shell {
+      width: min(920px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 32px 0;
+      display: flex;
+      flex-direction: column;
+    }
+    header { margin-bottom: 22px; }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .12em;
+    }
+    h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); line-height: 1.15; }
+    .subtitle { margin: 12px 0 0; color: var(--muted); line-height: 1.7; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: 0 16px 40px rgba(31, 49, 83, .08);
+    }
+    .notice { padding: 16px 20px; margin-bottom: 16px; color: #344054; font-size: 14px; line-height: 1.6; }
+    .notice strong { color: var(--ink); }
+    .conversation { flex: 1; min-height: 390px; padding: 20px; }
+    .messages { display: flex; flex-direction: column; gap: 14px; }
+    .message { max-width: min(78%, 680px); padding: 13px 16px; border-radius: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message.assistant { align-self: flex-start; background: var(--assistant); }
+    .message.user { align-self: flex-end; color: #fff; background: var(--brand); }
+    .message.error { align-self: flex-start; color: var(--danger); background: #fff1f0; }
+    .composer { margin-top: 16px; padding: 16px; }
+    form { display: flex; gap: 12px; align-items: flex-end; }
+    textarea {
+      flex: 1;
+      min-height: 54px;
+      max-height: 160px;
+      resize: vertical;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--ink);
+      font: inherit;
+      line-height: 1.5;
+    }
+    textarea:focus { outline: 3px solid rgba(36, 87, 214, .18); border-color: var(--brand); }
+    button {
+      min-width: 88px;
+      min-height: 52px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 12px;
+      color: #fff;
+      background: var(--brand);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { background: var(--brand-dark); }
+    button:disabled { cursor: wait; opacity: .6; }
+    .hint { margin: 10px 2px 0; color: var(--muted); font-size: 12px; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .example {
+      min-height: 0;
+      min-width: 0;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 400;
+      cursor: pointer;
+    }
+    .example:hover { color: var(--brand); background: #f7f9ff; }
+    @media (max-width: 600px) {
+      .shell { width: min(100% - 20px, 920px); padding: 20px 0; }
+      .conversation { min-height: 45vh; padding: 14px; }
+      .message { max-width: 90%; }
+      form { flex-direction: column; align-items: stretch; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="eyebrow">YUNCANG COPILOT</p>
+      <h1>云仓运营助手</h1>
+      <p class="subtitle">用自然语言查询模拟仓库库存。回答只基于只读数据，不执行库存或订单修改。</p>
+    </header>
+
+    <div class="card notice">
+      <strong>当前能力：</strong>库存查询（仓库、SKU、可用、占用、冻结、在途和库位）。订单自然语言查询尚未接入。
+    </div>
+
+    <section class="card conversation" aria-label="聊天记录">
+      <div class="messages" id="messages" aria-live="polite">
+        <div class="message assistant">你好！请告诉我仓库和 SKU，例如“DEMO-WH-01 的 DEMO-SKU-001 有多少可用库存？”</div>
+      </div>
+    </section>
+
+    <section class="card composer">
+      <form id="chat-form">
+        <textarea id="message-input" name="message" maxlength="2000" required placeholder="输入你的库存问题…" aria-label="库存问题"></textarea>
+        <button id="send-button" type="submit">发送</button>
+      </form>
+      <div class="examples" aria-label="示例问题">
+        <button class="example" type="button" data-message="DEMO-WH-01 的 DEMO-SKU-001 有多少可用库存？">查可用库存</button>
+        <button class="example" type="button" data-message="DEMO-WH-01 的 DEMO-SKU-002 在途数量是多少？">查在途数量</button>
+      </div>
+      <p class="hint" id="status-hint">提示：这是本地模拟数据助手。</p>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("message-input");
+    const sendButton = document.getElementById("send-button");
+    const messages = document.getElementById("messages");
+    const statusHint = document.getElementById("status-hint");
+
+    function addMessage(text, role) {
+      const message = document.createElement("div");
+      message.className = `message ${role}`;
+      message.textContent = text;
+      messages.appendChild(message);
+      message.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    async function sendMessage(message) {
+      addMessage(message, "user");
+      sendButton.disabled = true;
+      input.disabled = true;
+      statusHint.textContent = "正在查询模拟库存…";
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.detail || `请求失败（${response.status}）`);
+        }
+        addMessage(payload.answer || "助手没有返回文字回答。", "assistant");
+        statusHint.textContent = "回答基于当前本地模拟数据。";
+      } catch (error) {
+        addMessage(`暂时无法完成查询：${error.message}`, "error");
+        statusHint.textContent = "请检查 API 服务和本地 DeepSeek 配置。";
+      } finally {
+        sendButton.disabled = false;
+        input.disabled = false;
+        input.focus();
+      }
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message || sendButton.disabled) return;
+      input.value = "";
+      sendMessage(message);
+    });
+
+    document.querySelectorAll(".example").forEach((button) => {
+      button.addEventListener("click", () => {
+        input.value = button.dataset.message || "";
+        input.focus();
+      });
+    });
+  </script>
+</body>
+</html>
