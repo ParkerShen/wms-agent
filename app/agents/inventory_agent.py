@@ -14,17 +14,22 @@ from app.llm.deepseek import (
     StreamCompletionChunk,
     StreamToolCallDelta,
 )
-from app.tools.inventory import QUERY_INVENTORY_TOOL, execute_query_inventory
+from app.tools.inventory import QUERY_INVENTORY_TOOL, execute_inventory_tool, registered_inventory_tools
 
 
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 4
 TOOL_RESULT_MAX_CHARS = 4000
 INVENTORY_AGENT_SYSTEM_PROMPT = (
-    "You are a read-only warehouse inventory assistant. For inventory questions, "
-    "use query_inventory and base your answer only on its result. Do not invent "
-    "quantities, construct SQL, or claim to change data. If the tool reports an "
-    "error, explain that the requested inventory could not be verified."
+    "You are a read-only warehouse inventory assistant using fictional showcase data. "
+    "For questions asking which warehouses exist, use list_warehouses. For products in a "
+    "warehouse use list_warehouse_products; for warehouses containing a product use "
+    "find_product_warehouses. These tools accept Chinese or English names/cities, or codes. "
+    "Use query_inventory for a detailed stock lookup when the warehouse and SKU are known. "
+    "Base every factual answer only on tool results. Do not invent quantities, construct SQL, "
+    "or claim to change data. Ask the user to clarify when the tool returns ambiguous candidates. "
+    "Distinguish on-hand from in-transit inventory and disclose when a result page is incomplete. "
+    "If a tool reports an error, explain that the requested information could not be verified."
 )
 
 
@@ -51,7 +56,7 @@ class _ToolCallAccumulator:
 
 
 def inventory_tool_definition() -> dict[str, Any]:
-    """Return the provider-neutral inventory tool contract in function-call format."""
+    """Return the fixed provider-neutral Tool allowlist in function-call format."""
     return {
         "type": "function",
         "function": {
@@ -60,6 +65,21 @@ def inventory_tool_definition() -> dict[str, Any]:
             "parameters": QUERY_INVENTORY_TOOL["input_schema"],
         },
     }
+
+
+def inventory_tool_definitions() -> list[dict[str, Any]]:
+    """Return the registered inventory and catalog tools for model requests."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["input_schema"],
+            },
+        }
+        for tool in registered_inventory_tools()
+    ]
 
 
 def run_inventory_agent(
@@ -81,7 +101,7 @@ def run_inventory_agent(
         {"role": "system", "content": INVENTORY_AGENT_SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
-    tools = [inventory_tool_definition()]
+    tools = inventory_tool_definitions()
     tool_rounds = 0
 
     while True:
@@ -138,7 +158,7 @@ async def stream_inventory_agent(
         {"role": "system", "content": INVENTORY_AGENT_SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
-    tools = [inventory_tool_definition()]
+    tools = inventory_tool_definitions()
     tool_rounds = 0
 
     while True:
@@ -242,15 +262,15 @@ def _execute_tool_call(
 ) -> dict[str, str] | dict[str, Any]:
     if not call_id or call_type != "function":
         raise AgentLoopError("Agent returned a malformed tool call.")
-    if name != QUERY_INVENTORY_TOOL["name"]:
-        return {"error": "Unknown tool."}
 
     try:
         arguments = json.loads(arguments_json)
         if not isinstance(arguments, Mapping):
             return {"error": "Tool arguments must be a JSON object."}
-        result = execute_query_inventory(session, arguments)
+        result = execute_inventory_tool(name, session, arguments)
         return {"ok": True, "data": result}
+    except KeyError:
+        return {"error": "Unknown tool."}
     except (json.JSONDecodeError, ValidationError):
         return {"error": "Tool arguments were invalid."}
     except InventoryNotFoundError:

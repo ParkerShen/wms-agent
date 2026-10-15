@@ -10,10 +10,15 @@ from sqlalchemy.pool import StaticPool
 from app.models import Base, InTransitInventory, InventoryBalance, SKU, Warehouse, WarehouseLocation
 from app.seed import seed_inventory
 from app.tools.inventory import (
+    DISCOVERY_TOOLS,
+    FIND_PRODUCT_WAREHOUSES_TOOL,
+    LIST_WAREHOUSES_TOOL,
+    LIST_WAREHOUSE_PRODUCTS_TOOL,
     QUERY_INVENTORY_TOOL,
     QUERY_INVENTORY_TOOL_NAME,
     QUERY_INVENTORY_TOOL_SCHEMA,
     QueryInventoryInput,
+    execute_inventory_tool,
     execute_query_inventory,
 )
 from app.seed_bulk import _generate_rows, _seed_showcase
@@ -57,6 +62,27 @@ def test_inventory_tool_contract_has_only_bounded_inputs() -> None:
         )
     with pytest.raises(ValidationError):
         QueryInventoryInput.model_validate({"warehouse_code": "", "sku_code": "DEMO-SKU-001"})
+
+
+def test_discovery_tools_have_bounded_strict_schemas_and_execute(tool_engine: Engine) -> None:
+    assert [tool["name"] for tool in DISCOVERY_TOOLS] == [
+        "list_warehouses",
+        "list_warehouse_products",
+        "find_product_warehouses",
+    ]
+    for tool in DISCOVERY_TOOLS:
+        assert tool["input_schema"]["additionalProperties"] is False
+
+    with Session(tool_engine) as session:
+        warehouses = execute_inventory_tool("list_warehouses", session, {"limit": 2})
+    assert warehouses["status"] == "ok"
+    assert warehouses["items"] == []
+    assert warehouses["total"] == 0
+
+    with pytest.raises(ValidationError):
+        execute_inventory_tool("list_warehouses", Session(tool_engine), {"limit": 5000})
+    with pytest.raises(KeyError):
+        execute_inventory_tool("execute_sql", Session(tool_engine), {})
 
 
 def test_inventory_tool_returns_repository_result(tool_engine: Engine) -> None:

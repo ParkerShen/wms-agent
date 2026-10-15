@@ -116,16 +116,16 @@
     <header>
       <p class="eyebrow">YUNCANG COPILOT</p>
       <h1>云仓运营助手</h1>
-      <p class="subtitle">用自然语言查询模拟仓库库存。回答只基于只读数据，不执行库存或订单修改。</p>
+      <p class="subtitle">用中文仓库名、城市或商品名查询模拟仓库数据。回答只基于只读数据，不执行库存或订单修改。</p>
     </header>
 
     <div class="card notice">
-      <strong>当前能力：</strong>库存查询（仓库、SKU、可用、占用、冻结、在途和库位）。订单自然语言查询尚未接入。
+      <strong>当前能力：</strong>可列出演示仓库、查询仓库商品和商品所在仓库；库存详情包含可用、占用、冻结、在途和库位。订单自然语言查询尚未接入。
     </div>
 
     <section class="card conversation" aria-label="聊天记录">
       <div class="messages" id="messages" aria-live="polite">
-        <div class="message assistant">你好！请告诉我仓库和 SKU，例如“DEMO-WH-01 的 DEMO-SKU-001 有多少可用库存？”</div>
+        <div class="message assistant">你好！可以直接用中文问“有哪些仓库？”“洛杉矶仓库有什么商品？”或“蓝牙降噪耳机（曜石黑）在哪些仓库有库存？”。</div>
       </div>
     </section>
 
@@ -135,10 +135,11 @@
         <button id="send-button" type="submit">发送</button>
       </form>
       <div class="examples" aria-label="示例问题">
-        <button class="example" type="button" data-message="DEMO-WH-01 的 DEMO-SKU-001 有多少可用库存？">查可用库存</button>
-        <button class="example" type="button" data-message="DEMO-WH-01 的 DEMO-SKU-002 在途数量是多少？">查在途数量</button>
+        <button class="example" type="button" data-message="有哪些仓库？">列出仓库</button>
+        <button class="example" type="button" data-message="洛杉矶仓库有什么商品？">查看仓库商品</button>
+        <button class="example" type="button" data-message="蓝牙降噪耳机（曜石黑）在哪些仓库有库存？">查商品所在仓库</button>
       </div>
-      <p class="hint" id="status-hint">提示：这是本地模拟数据助手。</p>
+      <p class="hint" id="status-hint">提示：可用中文名称或编码查询本地虚构模拟数据。</p>
     </section>
   </main>
 

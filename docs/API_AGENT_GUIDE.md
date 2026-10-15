@@ -78,11 +78,13 @@ available = good_on_hand - allocated - frozen
 ## Agent 调用链
 
 1. `ChatRequest` 校验输入，然后 FastAPI 为请求创建 SQLAlchemy Session 和 DeepSeek client。
-2. `run_inventory_agent` / `stream_inventory_agent` 将系统约束和用户问题交给模型，并提供 `inventory_tool_definition()` 导出的函数 schema。
-3. 模型只可通过固定 allowlist 调用 `query_inventory`。Tool 的 Pydantic schema 只允许必需的 `warehouse_code`、`sku_code`，拒绝额外字段和类型强制转换。
-4. Agent 校验完整调用，复用 `execute_query_inventory` 和只读 Repository；绝不让模型拼接或执行 SQL。
-5. 将结果按原始 `tool_call_id` 作为 `tool` 消息回传模型，直到模型返回最终文本。
-6. 当前限制最多 3 轮工具调用、每轮最多 4 次调用、传回模型的序列化 Tool 结果最多 4000 字符。工具调用无效或执行失败时仅返回安全、简短的错误信息，不泄露数据库异常。
+2. `run_inventory_agent` / `stream_inventory_agent` 将系统约束和用户问题交给模型，并提供固定的函数 Tool schemas。
+3. 固定 allowlist 提供 `query_inventory`、`list_warehouses`、`list_warehouse_products` 和 `find_product_warehouses`。查询工具使用严格 Pydantic schema；目录查询只访问 `SHOWCASE-V2-20261013` 虚构展示批次，仓库与商品名称/城市匹配由后端确定性完成，不允许模型猜编码或拼 SQL。
+4. 名称匹配优先完整代码、名称或城市，再匹配唯一子串。若匹配多个实体，工具返回有限候选，Agent 应请用户澄清；没有匹配时明确报告未找到。
+5. 仓库商品/商品所在仓库结果只根据该展示批次的库存余额和在途库存记录，分别返回现货、模拟可用量、在途量及库位数。订单行不作为仓库有货的证据。在途不代表已经存放在仓库库位。
+6. 目录列表每页最多 5 条商品/仓库反查结果（仓库目录最多 10 条），并返回总数、`has_more` 和 `next_offset`；Agent 必须如实说明结果不完整。现有详细库存查询仍可由 `query_inventory` 按确切仓库/SKU 编码调用。
+7. 将结果按原始 `tool_call_id` 作为 `tool` 消息回传模型直到最终文本；绝不执行模型提供的 SQL。同步与流式路径共享注册工具、轮数/调用数/结果大小限制和安全错误处理。
+8. 当前限制最多 3 轮工具调用、每轮最多 4 次调用、传回模型的序列化 Tool 结果最多 4000 字符。工具调用无效或执行失败时仅返回安全、简短的错误信息，不泄露数据库异常。
 
 同步与流式 Agent 共享工具契约和限制。流式版本会在收到文本片段时立即发给 UI；如果模型在同一轮还返回工具调用，这些文本也可能先于工具执行结果展示。分片工具参数则会缓存到当前模型轮结束，再验证调用 ID、类型、名称、JSON 参数和轮次上限；只有完整且通过校验的调用才会执行。
 

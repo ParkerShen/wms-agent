@@ -29,17 +29,17 @@ const EXAMPLES = [
   {
     icon: Warehouse,
     title: "查询仓库库存",
-    prompt: "DEMO-WH-01 仓库的 DEMO-SKU-001 有多少可用库存？",
+    prompt: "洛杉矶国际物流中心的蓝牙降噪耳机（曜石黑）有多少可用库存？",
   },
   {
     icon: PackageSearch,
-    title: "查看库位明细",
-    prompt: "请查询 DEMO-WH-01 中 DEMO-SKU-001 的库位和库存分布。",
+    title: "查看仓库商品",
+    prompt: "洛杉矶仓库里有哪些商品？",
   },
   {
     icon: Boxes,
-    title: "了解在途数量",
-    prompt: "DEMO-WH-01 仓库的 DEMO-SKU-002 有多少在途库存？",
+    title: "查商品所在仓库",
+    prompt: "蓝牙降噪耳机（曜石黑）在哪些仓库有库存？",
   },
 ];
 
@@ -168,7 +168,7 @@ export function ChatWorkspace() {
               今天想了解哪项库存？
             </h1>
             <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground sm:text-base">
-              说出仓库和商品编码，我会查询可用数量、库位明细及在途库存。
+              可以用中文说仓库、城市或商品名称；我会查找对应记录，也可以查询可用数量、库位明细及在途库存。
             </p>
 
             <div className="mt-9 grid w-full max-w-4xl gap-3 text-left md:grid-cols-3">

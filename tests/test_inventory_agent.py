@@ -11,12 +11,14 @@ from sqlalchemy.pool import StaticPool
 from app.agents.inventory_agent import (
     AgentLoopError,
     inventory_tool_definition,
+    inventory_tool_definitions,
     run_inventory_agent,
     stream_inventory_agent,
 )
 from app.llm.deepseek import ChatCompletion, StreamCompletionChunk, StreamToolCallDelta
-from app.models import Base
+from app.models import Base, InventoryBalance, SKU, Warehouse, WarehouseLocation
 from app.seed import seed_inventory
+from app.seed_bulk import SHOWCASE_BATCH_ID
 
 
 @pytest.fixture
@@ -210,16 +212,127 @@ def inventory_call(
 
 
 def test_inventory_tool_definition_uses_deepseek_function_schema() -> None:
-    definition = inventory_tool_definition()
+    definitions = inventory_tool_definitions()
 
-    assert definition["type"] == "function"
-    assert definition["function"]["name"] == "query_inventory"
-    assert definition["function"]["description"]
-    assert definition["function"]["parameters"]["additionalProperties"] is False
-    assert set(definition["function"]["parameters"]["properties"]) == {
+    assert len(definitions) == 4
+    assert [definition["function"]["name"] for definition in definitions] == [
+        "query_inventory",
+        "list_warehouses",
+        "list_warehouse_products",
+        "find_product_warehouses",
+    ]
+    assert definitions[0] == inventory_tool_definition()
+    for definition in definitions:
+        assert definition["type"] == "function"
+        assert definition["function"]["description"]
+        assert definition["function"]["parameters"]["additionalProperties"] is False
+    assert set(definitions[0]["function"]["parameters"]["properties"]) == {
         "warehouse_code",
         "sku_code",
     }
+
+
+def discovery_engine(agent_engine: Engine) -> Engine:
+    with Session(agent_engine) as session, session.begin():
+        warehouse = Warehouse(
+            display_id=1,
+            code="USLAX",
+            name="洛杉矶国际物流中心",
+            name_en="Los Angeles Regional Fulfillment Center",
+            city="Los Angeles",
+            city_cn="洛杉矶",
+            batch_id=SHOWCASE_BATCH_ID,
+        )
+        sku = SKU(
+            code="YC-TEST-001",
+            name="蓝牙降噪耳机（曜石黑）",
+            name_en="Bluetooth headset, onyx black",
+            batch_id=SHOWCASE_BATCH_ID,
+        )
+        session.add_all([warehouse, sku])
+        session.flush()
+        location = WarehouseLocation(
+            warehouse_id=warehouse.id, code="USLAX-RACK-01", batch_id=SHOWCASE_BATCH_ID
+        )
+        session.add(location)
+        session.flush()
+        session.add(
+            InventoryBalance(
+                location_id=location.id,
+                sku_id=sku.id,
+                good_on_hand=8,
+                allocated=1,
+                frozen=1,
+                batch_id=SHOWCASE_BATCH_ID,
+            )
+        )
+    return agent_engine
+
+
+def test_agent_runs_chinese_discovery_tool_calls(agent_engine: Engine) -> None:
+    engine = discovery_engine(agent_engine)
+    calls = [
+        {
+            "id": "list-products",
+            "type": "function",
+            "function": {
+                "name": "list_warehouse_products",
+                "arguments": '{"warehouse_query":"洛杉矶"}',
+            },
+        },
+        {
+            "id": "find-product",
+            "type": "function",
+            "function": {
+                "name": "find_product_warehouses",
+                "arguments": '{"product_query":"蓝牙降噪耳机（曜石黑）"}',
+            },
+        },
+        {
+            "id": "list-warehouses",
+            "type": "function",
+            "function": {"name": "list_warehouses", "arguments": "{}"},
+        },
+    ]
+    model = ScriptedModel([
+        completion({"role": "assistant", "content": None, "tool_calls": calls}, finish_reason="tool_calls"),
+        completion({"role": "assistant", "content": "查询到模拟仓库和商品信息。"}),
+    ])
+
+    with Session(engine) as session:
+        response = run_inventory_agent("洛杉矶仓有什么商品？蓝牙降噪耳机在哪个仓？有哪些仓库？", session, model)
+
+    assert response == "查询到模拟仓库和商品信息。"
+    tool_messages = model.requests[1][0][3:]
+    assert [message["tool_call_id"] for message in tool_messages] == [
+        "list-products", "find-product", "list-warehouses"
+    ]
+    product_result = json.loads(tool_messages[0]["content"])["data"]
+    assert product_result["warehouse"]["code"] == "USLAX"
+    assert product_result["items"][0]["code"] == "YC-TEST-001"
+    assert product_result["items"][0]["available"] == 6
+    reverse_result = json.loads(tool_messages[1]["content"])["data"]
+    assert reverse_result["items"][0]["code"] == "USLAX"
+    assert json.loads(tool_messages[2]["content"])["data"]["status"] == "ok"
+
+
+def test_stream_agent_runs_chinese_discovery_tool(agent_engine: Engine) -> None:
+    engine = discovery_engine(agent_engine)
+    chunks = [
+        StreamCompletionChunk(tool_calls=(StreamToolCallDelta(index=0, call_id="discovery-1", call_type="function"),)),
+        StreamCompletionChunk(tool_calls=(StreamToolCallDelta(index=0, name="find_product_warehouses", arguments='{"product_query":"蓝牙降噪耳机（曜石黑）"}'),), finish_reason="tool_calls"),
+    ]
+    model = ScriptedStreamModel(
+        [chunks, [StreamCompletionChunk(content="在洛杉矶仓有记录。", finish_reason="stop")]]
+    )
+
+    async def collect() -> list[str]:
+        with Session(engine) as session:
+            return [text async for text in stream_inventory_agent("这个商品在哪个仓？", session, model)]
+
+    assert asyncio.run(collect()) == ["在洛杉矶仓有记录。"]
+    result = json.loads(model.requests[1][0][-1]["content"])
+    assert result["data"]["items"][0]["code"] == "USLAX"
 
 
 def test_agent_returns_terminal_assistant_text() -> None:
@@ -229,10 +342,10 @@ def test_agent_returns_terminal_assistant_text() -> None:
 
     assert response == "你好"
     assert model.requests[0][0] == [
-        {"role": "system", "content": "You are a read-only warehouse inventory assistant. For inventory questions, use query_inventory and base your answer only on its result. Do not invent quantities, construct SQL, or claim to change data. If the tool reports an error, explain that the requested inventory could not be verified."},
+        {"role": "system", "content": "You are a read-only warehouse inventory assistant using fictional showcase data. For questions asking which warehouses exist, use list_warehouses. For products in a warehouse use list_warehouse_products; for warehouses containing a product use find_product_warehouses. These tools accept Chinese or English names/cities, or codes. Use query_inventory for a detailed stock lookup when the warehouse and SKU are known. Base every factual answer only on tool results. Do not invent quantities, construct SQL, or claim to change data. Ask the user to clarify when the tool returns ambiguous candidates. Distinguish on-hand from in-transit inventory and disclose when a result page is incomplete. If a tool reports an error, explain that the requested information could not be verified."},
         {"role": "user", "content": "你好"},
     ]
-    assert model.requests[0][1] == [inventory_tool_definition()]
+    assert model.requests[0][1] == inventory_tool_definitions()
 
 
 def test_agent_runs_inventory_tool_and_returns_final_answer(agent_engine: Engine) -> None:
@@ -405,7 +518,7 @@ def test_agent_tool_execution_errors_are_sanitized(
 
     import app.agents.inventory_agent as agent_module
 
-    monkeypatch.setattr(agent_module, "execute_query_inventory", fail_with_secret)
+    monkeypatch.setattr(agent_module, "execute_inventory_tool", lambda name, session, args: fail_with_secret())
     with Session(agent_engine) as session:
         response = run_inventory_agent("查库存", session, model)
 

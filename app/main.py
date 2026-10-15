@@ -177,14 +177,14 @@ class ChatRequest(BaseModel):
     message: str = Field(
         min_length=1,
         max_length=2000,
-        description="Natural-language question; current Agent scope is read-only inventory.",
+        description="Natural-language question; Agent supports read-only warehouse/product discovery and inventory lookup.",
     )
 
 
 class ChatResponse(BaseModel):
     """Final, non-streaming answer returned by POST /chat."""
 
-    answer: str = Field(description="Assistant answer based on the read-only inventory Tool.")
+    answer: str = Field(description="Answer based on the read-only inventory and catalog discovery Tools.")
 
 
 async def get_completion_model() -> AsyncIterator[CompletionModel]:
@@ -225,8 +225,8 @@ def health_check() -> dict[str, str]:
     tags=["chat"],
     summary="Answer a read-only inventory question",
     description=(
-        "Runs the bounded inventory Agent and returns one JSON answer. "
-        "The current Tool allowlist contains only query_inventory; it does not modify data."
+        "Runs the bounded read-only inventory Agent for warehouse/product discovery "
+        "and stock lookup using fictional showcase data; it does not modify data."
     ),
     responses={
         502: {"description": "Provider or Agent failed; internal details are not returned."},
@@ -257,11 +257,12 @@ def chat(
 @app.post(
     "/chat/stream",
     tags=["chat"],
-    summary="Stream a read-only inventory answer",
+    summary="Stream a read-only warehouse/product discovery or inventory answer",
     description=(
         "Returns Server-Sent Events using data-only JSON frames: "
         "{type: delta, text: ...}, then {type: done}; failures after streaming "
-        "starts use a safe {type: error, message: ...} event. Tool-call data is not exposed."
+        "starts use a safe {type: error, message: ...} event. Tool-call data is not exposed. "
+        "The read-only Agent supports Chinese/English warehouse and product discovery."
     ),
     responses={
         200: {"description": "text/event-stream containing delta and one terminal event."},

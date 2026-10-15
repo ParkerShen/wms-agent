@@ -45,8 +45,8 @@
 
 > 最近更新：2026-10-13。历史进度记录保留作项目决策依据；当前可用能力和下一步以 `PROJECT_PLAN.md` 的“当前进度与下一步”为准。
 
-- 已完成本地虚构数据的只读库存、订单 API 和库存问答 Agent；目前 Agent 只支持库存查询，绝不写业务数据。
-- 已新增 FastAPI `POST /chat/stream` SSE 接口，并修复异步 Agent 生成逻辑和 SSE frame 换行；流式路由/Agent 自动化测试通过。没有调用真实 DeepSeek API。
+- 已完成本地虚构数据的只读库存、订单 API 和库存问答 Agent；库存 Agent 支持中文仓库/商品发现与编码库存查询，目前 Agent 仍不支持订单自然语言查询，绝不写业务数据。
+- 已补充 V1 固定只读仓库/商品发现工具：聊天可列出演示仓库、按中文/英文仓库名或城市查询商品、按中文/英文商品名查询有记录的仓库；匹配歧义需澄清，分页结果明确标识现货和在途。详细实现与验证进度见 `PROJECT_PLAN.md`。
 - 已在 `frontend/` 建立 Next.js 16 + React 19 + TypeScript + Tailwind v4 App Router 聊天页，配置 shadcn/ui 风格本地组件与 `/api/chat` 服务端代理；前端使用 fetch 解析 SSE，不向浏览器暴露 DeepSeek Key。
 - 已补充 API/OpenAPI 与 Agent/Tool/Repository/DeepSeek 关键 docstring，并新增 `docs/API_AGENT_GUIDE.md`，说明接口契约、SSE 事件、Agent 循环边界、资源管理和扩展检查点。
 - 前端当前验证状态：lint、2 项前端测试、typecheck 和 Next production build 全部通过。生产构建服务在本地返回聊天页 HTTP 200；FastAPI 与 Next 的本地代理 smoke 使用临时清空的模型 Key，返回预期 HTTP 503，未调用真实模型。真实 SSE delta 需通过 mock 自动化测试验证；未用浏览器驱动做视觉检查。
